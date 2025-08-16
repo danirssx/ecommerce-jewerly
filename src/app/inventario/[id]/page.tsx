@@ -1,47 +1,93 @@
-import { supabase } from "@/lib/supabase";
-import { Product } from "@/types/database";
+"use client";
+
+import { ProductVariant, Brand, ProductType } from "@/types/database";
 import Link from "next/link";
+import Image from "next/image";
 import { notFound } from "next/navigation";
+import { useState, useEffect } from "react";
+import {
+  getProductVariant,
+  getBrands,
+  getProductTypes,
+  updateProduct,
+} from "@/lib/api/inventory";
 
-async function getProduct(id: string): Promise<Product | null> {
-  const { data, error } = await supabase
-    .from("products")
-    .select(
-      `
-      *,
-      product_types(name),
-      brands(name, description),
-      product_images(url, alt_text, sort_order),
-      color_products(
-        color_hex_code,
-        colors(name)
-      ),
-      inventory_current(quantity, updated_at)
-    `
-    )
-    .eq("id", id)
-    .single();
+export default function ProductPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const [product, setProduct] = useState<ProductVariant | null>(null);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [productTypes, setProductTypes] = useState<ProductType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [productId, setProductId] = useState<string>("");
 
-  if (error) {
-    return null;
+  useEffect(() => {
+    const unwrapParams = async () => {
+      const resolvedParams = await params;
+      setProductId(resolvedParams.id);
+    };
+    unwrapParams();
+  }, [params]);
+
+  useEffect(() => {
+    if (productId) {
+      loadData();
+    }
+  }, [productId]);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [productData, brandsData, typesData] = await Promise.all([
+        getProductVariant(productId),
+        getBrands(),
+        getProductTypes(),
+      ]);
+
+      if (!productData) {
+        notFound();
+      }
+
+      setProduct(productData);
+      setBrands(brandsData);
+      setProductTypes(typesData);
+    } catch (err) {
+      console.error("Error loading data:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditClick = () => {
+    setShowEditForm(true);
+  };
+
+  const handleFormClose = () => {
+    setShowEditForm(false);
+    loadData();
+  };
+
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center">Cargando...</div>
+      </div>
+    );
   }
-
-  return data;
-}
-
-export default async function ProductPage({ params }: { params: { id: string } }) {
-  const product = await getProduct(params.id);
 
   if (!product) {
     notFound();
   }
 
-  // Ordenar imágenes por sort_order
-  const sortedImages = product.product_images?.sort((a, b) => a.sort_order - b.sort_order) || [];
+  const sortedImages =
+    product.product_images?.sort((a, b) => a.sort_order - b.sort_order) || [];
+  const productGroup = product.product_groups;
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Breadcrumb */}
       <nav className="mb-6">
         <Link href="/inventario" className="text-blue-600 hover:text-blue-800">
           ← Volver al inventario
@@ -49,106 +95,124 @@ export default async function ProductPage({ params }: { params: { id: string } }
       </nav>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Galería de imágenes */}
         <div>
           {sortedImages.length > 0 ? (
             <div className="space-y-4">
-              <div className="aspect-square">
-                <img
+              <div className="relative aspect-square rounded-lg overflow-hidden bg-gray-100">
+                <Image
                   src={sortedImages[0].url}
-                  alt={sortedImages[0].alt_text || product.name}
-                  className="w-full h-full object-cover rounded-lg"
+                  alt={sortedImages[0].alt_text || `Producto ${product.code}`}
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 100vw, 50vw"
+                  priority
                 />
               </div>
 
               {sortedImages.length > 1 && (
                 <div className="grid grid-cols-4 gap-2">
                   {sortedImages.slice(1).map((image, index) => (
-                    <img
+                    <div
                       key={index}
-                      src={image.url}
-                      alt={image.alt_text || product.name}
-                      className="w-full aspect-square object-cover rounded"
-                    />
+                      className="relative aspect-square rounded overflow-hidden bg-gray-100"
+                    >
+                      <Image
+                        src={image.url}
+                        alt={
+                          image.alt_text ||
+                          `Producto ${product.code} - imagen ${index + 2}`
+                        }
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 25vw, 12.5vw"
+                      />
+                    </div>
                   ))}
                 </div>
               )}
             </div>
           ) : (
             <div className="aspect-square bg-gray-200 rounded-lg flex items-center justify-center">
-              <span className="text-gray-500">Sin imagen</span>
+              <span className="text-gray-500">Sin imagen disponible</span>
             </div>
           )}
         </div>
 
-        {/* Información del producto */}
         <div className="space-y-6">
           <div>
-            <h1 className="text-3xl font-bold mb-2">{product.name}</h1>
+            <h1 className="text-3xl font-bold mb-2 text-gray-800">
+              {productGroup?.name || `Producto ${product.code}`}
+            </h1>
             <p className="text-gray-600">Código: {product.code}</p>
+            {product.size && (
+              <p className="text-gray-600">Tamaño: {product.size}</p>
+            )}
+            {product.color && (
+              <p className="text-gray-600">Color: {product.color}</p>
+            )}
           </div>
 
-          {/* Precio */}
+          {product.price && product.original_price !== product.price && (
+            <p className="text-2xl text-green-600 mt-1">
+              Nuestro Precio: ${product.price}
+            </p>
+          )}
+
           <div>
             {product.sale_price ? (
-              <div className="flex items-center gap-3">
-                <span className="text-3xl font-bold text-red-600">${product.sale_price}</span>
-                <span className="text-xl line-through text-gray-500">${product.price}</span>
-                <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-sm">En oferta</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-lg font-bold text-red-600">
+                  Precio Original: ${product.sale_price}
+                </span>
+                <span className="text-xl line-through text-gray-500">
+                  ${product.original_price}
+                </span>
+                <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-sm">
+                  En oferta
+                </span>
               </div>
             ) : (
-              <span className="text-3xl font-bold">${product.price}</span>
-            )}
-
-            {product.original_price && product.original_price !== product.price && (
-              <p className="text-sm text-gray-500 mt-1">Precio original: ${product.original_price}</p>
+              <span className="text-lg font-bold text-gray-800">
+                Precio Original: ${product.original_price}
+              </span>
             )}
           </div>
 
-          {/* Información adicional */}
-          <div className="space-y-3">
-            {product.brands && (
+          <div className="space-y-4">
+            {productGroup?.brands && (
               <div>
-                <h3 className="font-semibold">Marca</h3>
-                <p>{product.brands.name}</p>
-                {product.brands.description && <p className="text-sm text-gray-600">{product.brands.description}</p>}
+                <h3 className="font-semibold text-gray-800">Marca</h3>
+                <p className="text-gray-700">{productGroup.brands.name}</p>
               </div>
             )}
 
-            {product.product_types && (
+            {productGroup?.product_types && (
               <div>
-                <h3 className="font-semibold">Tipo de producto</h3>
-                <p>{product.product_types.name}</p>
+                <h3 className="font-semibold text-gray-800">
+                  Tipo de producto
+                </h3>
+                <p className="text-gray-700">
+                  {productGroup.product_types.name}
+                </p>
               </div>
             )}
 
-            {/* Colores disponibles */}
-            {product.color_products && product.color_products.length > 0 && (
+            {product.composition && (
               <div>
-                <h3 className="font-semibold mb-2">Colores disponibles</h3>
-                <div className="flex gap-2">
-                  {product.color_products.map((colorProduct) => (
-                    <div key={colorProduct.color_hex_code} className="flex items-center gap-2">
-                      <div
-                        className="w-6 h-6 rounded-full border"
-                        style={{ backgroundColor: colorProduct.color_hex_code }}
-                        title={colorProduct.colors?.name || colorProduct.color_hex_code}
-                      />
-                      <span className="text-sm">{colorProduct.colors?.name || colorProduct.color_hex_code}</span>
-                    </div>
-                  ))}
-                </div>
+                <h3 className="font-semibold text-gray-800">Composición</h3>
+                <p className="text-gray-700">{product.composition}</p>
               </div>
             )}
 
-            {/* Inventario */}
             {product.inventory_current && (
               <div>
-                <h3 className="font-semibold">Disponibilidad</h3>
+                <h3 className="font-semibold text-gray-800">Disponibilidad</h3>
                 <div className="flex items-center gap-2">
                   <span
-                    className={`px-3 py-1 rounded ${
-                      product.inventory_current.quantity > 0 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                    className={`px-3 py-1 rounded font-medium ${
+                      product.inventory_current.quantity > 0
+                        ? "bg-green-100 text-green-800"
+                        : "bg-red-100 text-red-800"
                     }`}
                   >
                     {product.inventory_current.quantity > 0
@@ -157,41 +221,297 @@ export default async function ProductPage({ params }: { params: { id: string } }
                   </span>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Última actualización: {new Date(product.inventory_current.updated_at).toLocaleDateString()}
+                  Última actualización:{" "}
+                  {new Date(
+                    product.inventory_current.updated_at,
+                  ).toLocaleDateString("es-ES")}
                 </p>
               </div>
             )}
           </div>
 
-          {/* Descripción */}
-          {product.description && (
+          {productGroup?.description && (
             <div>
-              <h3 className="font-semibold mb-2">Descripción</h3>
-              <p className="text-gray-700 leading-relaxed">{product.description}</p>
+              <h3 className="font-semibold mb-2 text-gray-800">Descripción</h3>
+              <p className="text-gray-700 leading-relaxed">
+                {productGroup.description}
+              </p>
             </div>
           )}
 
-          {/* URL original */}
-          {product.original_url && (
-            <div>
-              <h3 className="font-semibold mb-2">URL original</h3>
-              <a
-                href={product.original_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:text-blue-800 text-sm break-all"
-              >
-                {product.original_url}
-              </a>
-            </div>
-          )}
+          <div className="text-sm text-gray-500 border-t pt-4 space-y-1">
+            {product.created_at && (
+              <p>
+                Creado:{" "}
+                {new Date(product.created_at).toLocaleDateString("es-ES")}
+              </p>
+            )}
+            {product.updated_at && (
+              <p>
+                Actualizado:{" "}
+                {new Date(product.updated_at).toLocaleDateString("es-ES")}
+              </p>
+            )}
+          </div>
 
-          {/* Fechas */}
-          <div className="text-sm text-gray-500 border-t pt-4">
-            <p>Creado: {new Date(product.created_at).toLocaleDateString()}</p>
-            <p>Actualizado: {new Date(product.updated_at).toLocaleDateString()}</p>
+          <div className="flex gap-3 pt-4">
+            <button
+              onClick={handleEditClick}
+              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
+            >
+              Editar producto
+            </button>
+            <Link
+              href="/inventario"
+              className="bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400 transition-colors"
+            >
+              Volver al inventario
+            </Link>
           </div>
         </div>
+      </div>
+
+      {showEditForm && (
+        <ProductForm
+          product={product}
+          brands={brands}
+          productTypes={productTypes}
+          onClose={handleFormClose}
+        />
+      )}
+    </div>
+  );
+}
+
+function ProductForm({
+  product,
+  brands,
+  productTypes,
+  onClose,
+}: {
+  product: ProductVariant | null;
+  brands: Brand[];
+  productTypes: ProductType[];
+  onClose: () => void;
+}) {
+  const [formData, setFormData] = useState({
+    product_group_id: product?.product_group_id || 0,
+    size: product?.size || "",
+    color: product?.color || "",
+    code: product?.code || 0,
+    price: product?.price || 0,
+    original_price: product?.original_price || 0,
+    sale_price: product?.sale_price || 0,
+    composition: product?.composition || "",
+    groupName: product?.product_groups?.name || "",
+    groupDescription: product?.product_groups?.description || "",
+    brandId: product?.product_groups?.brand_id || 0,
+    productTypeId: product?.product_groups?.product_type_id || 0,
+    quantity: product?.inventory_current?.quantity || 0,
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    try {
+      if (product) {
+        await updateProductData();
+        onClose();
+      } else {
+        alert("Error: No se puede crear productos, solo editar.");
+      }
+    } catch (err) {
+      alert(
+        "Error: " + (err instanceof Error ? err.message : "Error desconocido"),
+      );
+    }
+  };
+
+  const updateProductData = async () => {
+    if (!product) return;
+
+    await updateProduct({
+      product_id: product.id,
+      size: formData.size || undefined,
+      color: formData.color || undefined,
+      code: formData.code,
+      price: formData.price,
+      original_price: formData.original_price || undefined,
+      sale_price: formData.sale_price || undefined,
+      composition: formData.composition || undefined,
+      quantity: formData.quantity,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 text-gray-800">
+      <div className="bg-white rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <h2 className="text-xl font-bold mb-4">
+          {product ? "Editar Producto" : "Agregar Producto"}
+        </h2>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {!product && (
+            <>
+              <input
+                type="text"
+                placeholder="Nombre del grupo de producto"
+                value={formData.groupName}
+                onChange={(e) =>
+                  setFormData({ ...formData, groupName: e.target.value })
+                }
+                required
+                className="w-full p-2 border rounded"
+              />
+
+              <textarea
+                placeholder="Descripción del grupo"
+                value={formData.groupDescription}
+                onChange={(e) =>
+                  setFormData({ ...formData, groupDescription: e.target.value })
+                }
+                className="w-full p-2 border rounded"
+              />
+
+              <select
+                value={formData.brandId}
+                onChange={(e) =>
+                  setFormData({ ...formData, brandId: Number(e.target.value) })
+                }
+                required
+                className="w-full p-2 border rounded"
+              >
+                <option value={0}>Seleccionar marca</option>
+                {brands.map((brand) => (
+                  <option key={brand.id} value={brand.id}>
+                    {brand.name}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={formData.productTypeId}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    productTypeId: Number(e.target.value),
+                  })
+                }
+                required
+                className="w-full p-2 border rounded"
+              >
+                <option value={0}>Seleccionar tipo</option>
+                {productTypes.map((type) => (
+                  <option key={type.id} value={type.id}>
+                    {type.name}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+
+          <input
+            type="text"
+            placeholder="Tamaño"
+            value={formData.size}
+            onChange={(e) => setFormData({ ...formData, size: e.target.value })}
+            className="w-full p-2 border rounded"
+          />
+
+          <input
+            type="text"
+            placeholder="Color"
+            value={formData.color}
+            onChange={(e) =>
+              setFormData({ ...formData, color: e.target.value })
+            }
+            className="w-full p-2 border rounded"
+          />
+
+          <input
+            type="number"
+            placeholder="Código"
+            value={formData.code}
+            onChange={(e) =>
+              setFormData({ ...formData, code: Number(e.target.value) })
+            }
+            required
+            className="w-full p-2 border rounded"
+          />
+
+          <input
+            type="number"
+            step="0.01"
+            placeholder="Precio"
+            value={formData.price}
+            onChange={(e) =>
+              setFormData({ ...formData, price: Number(e.target.value) })
+            }
+            required
+            className="w-full p-2 border rounded"
+          />
+
+          <input
+            type="number"
+            step="0.01"
+            placeholder="Precio original"
+            value={formData.original_price}
+            onChange={(e) =>
+              setFormData({
+                ...formData,
+                original_price: Number(e.target.value),
+              })
+            }
+            className="w-full p-2 border rounded"
+          />
+
+          <input
+            type="number"
+            step="0.01"
+            placeholder="Precio de oferta"
+            value={formData.sale_price}
+            onChange={(e) =>
+              setFormData({ ...formData, sale_price: Number(e.target.value) })
+            }
+            className="w-full p-2 border rounded"
+          />
+
+          <input
+            type="text"
+            placeholder="Composición"
+            value={formData.composition}
+            onChange={(e) =>
+              setFormData({ ...formData, composition: e.target.value })
+            }
+            className="w-full p-2 border rounded"
+          />
+
+          <input
+            type="number"
+            placeholder="Cantidad en inventario"
+            value={formData.quantity}
+            onChange={(e) =>
+              setFormData({ ...formData, quantity: Number(e.target.value) })
+            }
+            className="w-full p-2 border rounded"
+          />
+
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+            >
+              {product ? "Actualizar" : "Crear"}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

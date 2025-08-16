@@ -1,22 +1,9 @@
-export interface Product {
+export interface Brand {
   id: number
-  product_type_id: number
-  code: string
   name: string
   description?: string
-  price: number
-  original_price?: number
-  sale_price?: number
-  original_url?: string
   created_at: string
   updated_at: string
-  brand_id?: number
-  // Relaciones
-  product_types?: ProductType
-  brands?: Brand
-  product_images?: ProductImage[]
-  color_products?: ColorProduct[]
-  inventory_current?: InventoryCurrent
 }
 
 export interface ProductType {
@@ -24,12 +11,33 @@ export interface ProductType {
   name: string
 }
 
-export interface Brand {
+export interface ProductGroup {
   id: number
   name: string
   description?: string
-  created_at: string
-  updated_at: string
+  brand_id: number
+  product_type_id: number
+  created_at?: string
+  updated_at?: string
+  brands?: Brand
+  product_types?: ProductType
+}
+
+export interface ProductVariant {
+  id: number
+  product_group_id: number
+  size?: string
+  color?: string
+  code: number
+  price: number
+  original_price?: number
+  sale_price?: number
+  composition?: string
+  created_at?: string
+  updated_at?: string
+  product_groups?: ProductGroup
+  product_images?: ProductImage[]
+  inventory_current?: InventoryCurrent
 }
 
 export interface ProductImage {
@@ -40,19 +48,16 @@ export interface ProductImage {
   sort_order: number
 }
 
-export interface Color {
-  hex_code: string
-  name: string
-}
-
-export interface ColorProduct {
-  product_id: number
-  color_hex_code: string
-  colors?: Color
-}
-
 export interface InventoryCurrent {
   product_id: number
   quantity: number
   updated_at: string
+}
+
+export interface InventoryMovement {
+  id: number
+  product_id: number
+  movement_type: 'IN' | 'OUT'
+  quantity: number
+  created_at: string
 } 
