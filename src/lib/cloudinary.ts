@@ -1,10 +1,15 @@
 import { v2 as cloudinary } from "cloudinary";
 
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_URL?.split("@")[1] || "",
-  api_key: process.env.CLOUDINARY_API || "",
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_URL?.split("@")[1] || "",
+  api_key: process.env.CLOUDINARY_API_KEY || process.env.CLOUDINARY_API || "",
   api_secret: process.env.CLOUDINARY_API_SECRET || "",
 });
+
+// Validate configuration
+if (!cloudinary.config().cloud_name || !cloudinary.config().api_key || !cloudinary.config().api_secret) {
+  console.error("Cloudinary configuration missing. Required: CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET");
+}
 
 export interface CloudinaryUploadResult {
   public_id: string;
