@@ -81,6 +81,13 @@ export default function ProductPage({
     loadData();
   };
 
+  const handleBarcodeSearch = () => {
+    if (product?.code) {
+      const searchUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(product.code.toString())}`;
+      window.open(searchUrl, "_blank");
+    }
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -154,7 +161,22 @@ export default function ProductPage({
             <h1 className="text-3xl font-bold mb-2 text-gray-800">
               {productGroup?.name || `Producto ${product.code}`}
             </h1>
-            <p className="text-gray-600">Código: {product.code}</p>
+            <div className="space-y-2">
+              <p className="text-gray-600">Código: {product.code}</p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Código de barras (buscar imágenes)
+                </label>
+                <input
+                  type="text"
+                  value={product.code}
+                  readOnly
+                  onClick={handleBarcodeSearch}
+                  className="w-full max-w-xs p-2 border border-gray-300 rounded bg-green-50 hover:bg-green-100 cursor-pointer transition-colors text-gray-800"
+                  title="Click para buscar imágenes de este código"
+                />
+              </div>
+            </div>
             {product.size && (
               <p className="text-gray-600">Tamaño: {product.size}</p>
             )}
@@ -298,10 +320,7 @@ export default function ProductPage({
       )}
 
       {showImageUpload && (
-        <ImageUploadForm
-          product={product}
-          onClose={handleImageUploadClose}
-        />
+        <ImageUploadForm product={product} onClose={handleImageUploadClose} />
       )}
     </div>
   );
@@ -576,7 +595,10 @@ function ImageUploadForm({
       alert("Imagen subida exitosamente");
       onClose();
     } catch (error) {
-      alert("Error subiendo la imagen: " + (error instanceof Error ? error.message : "Error desconocido"));
+      alert(
+        "Error subiendo la imagen: " +
+          (error instanceof Error ? error.message : "Error desconocido"),
+      );
     } finally {
       setUploading(false);
     }
