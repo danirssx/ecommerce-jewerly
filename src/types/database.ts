@@ -44,6 +44,7 @@ export interface ProductImage {
   id: number
   product_id: number
   url: string
+  url_cloudinary?: string
   alt_text?: string
   sort_order: number
 }

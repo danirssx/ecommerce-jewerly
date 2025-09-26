@@ -10,6 +10,7 @@ import {
   getBrands,
   getProductTypes,
   updateProduct,
+  uploadProductImage,
 } from "@/lib/api/inventory";
 
 export default function ProductPage({
@@ -22,6 +23,7 @@ export default function ProductPage({
   const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [loading, setLoading] = useState(true);
   const [showEditForm, setShowEditForm] = useState(false);
+  const [showImageUpload, setShowImageUpload] = useState(false);
   const [productId, setProductId] = useState<string>("");
 
   useEffect(() => {
@@ -67,6 +69,15 @@ export default function ProductPage({
 
   const handleFormClose = () => {
     setShowEditForm(false);
+    loadData();
+  };
+
+  const handleImageUploadClick = () => {
+    setShowImageUpload(true);
+  };
+
+  const handleImageUploadClose = () => {
+    setShowImageUpload(false);
     loadData();
   };
 
@@ -261,6 +272,12 @@ export default function ProductPage({
             >
               Editar producto
             </button>
+            <button
+              onClick={handleImageUploadClick}
+              className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors"
+            >
+              Guardar imagen
+            </button>
             <Link
               href="/inventario"
               className="bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400 transition-colors"
@@ -277,6 +294,13 @@ export default function ProductPage({
           brands={brands}
           productTypes={productTypes}
           onClose={handleFormClose}
+        />
+      )}
+
+      {showImageUpload && (
+        <ImageUploadForm
+          product={product}
+          onClose={handleImageUploadClose}
         />
       )}
     </div>
@@ -507,6 +531,123 @@ function ProductForm({
               type="button"
               onClick={onClose}
               className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+            >
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function ImageUploadForm({
+  product,
+  onClose,
+}: {
+  product: ProductVariant | null;
+  onClose: () => void;
+}) {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [altText, setAltText] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    }
+  };
+
+  const handleUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!selectedFile || !product) {
+      alert("Por favor selecciona una imagen");
+      return;
+    }
+
+    try {
+      setUploading(true);
+      await uploadProductImage(selectedFile, product.id, altText);
+      alert("Imagen subida exitosamente");
+      onClose();
+    } catch (error) {
+      alert("Error subiendo la imagen: " + (error instanceof Error ? error.message : "Error desconocido"));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <h2 className="text-xl font-bold mb-4 text-gray-800">
+          Subir imagen para {product?.code}
+        </h2>
+
+        <form onSubmit={handleUpload} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Seleccionar imagen
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleFileSelect}
+              required
+              className="w-full p-2 border rounded text-gray-800"
+            />
+          </div>
+
+          {previewUrl && (
+            <div className="relative aspect-square w-full bg-gray-100 rounded overflow-hidden">
+              <Image
+                src={previewUrl}
+                alt="Vista previa"
+                fill
+                className="object-cover"
+                sizes="(max-width: 400px) 100vw, 400px"
+              />
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Texto alternativo (opcional)
+            </label>
+            <input
+              type="text"
+              placeholder="Descripción de la imagen"
+              value={altText}
+              onChange={(e) => setAltText(e.target.value)}
+              className="w-full p-2 border rounded text-gray-800"
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={uploading || !selectedFile}
+              className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              {uploading ? "Subiendo..." : "Subir imagen"}
+            </button>
+            <button
+              type="button"
+              onClick={handleClose}
+              disabled={uploading}
+              className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 disabled:bg-gray-400"
             >
               Cancelar
             </button>

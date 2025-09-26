@@ -65,10 +65,46 @@ export async function updateProduct(productData: {
     },
     body: JSON.stringify(productData),
   });
-  
+
   const result = await response.json();
-  
+
   if (!response.ok) {
     throw new Error(result.error || 'Error updating product');
   }
+}
+
+export async function uploadProductImage(
+  file: File,
+  productId: number,
+  altText?: string
+): Promise<{
+  id: number;
+  url: string;
+  url_cloudinary: string;
+  alt_text: string;
+  sort_order: number;
+  cloudinary: {
+    public_id: string;
+    secure_url: string;
+  };
+}> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('productId', productId.toString());
+  if (altText) {
+    formData.append('altText', altText);
+  }
+
+  const response = await fetch('/api/product-images', {
+    method: 'POST',
+    body: formData,
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.error || 'Error uploading image');
+  }
+
+  return result.data;
 }
